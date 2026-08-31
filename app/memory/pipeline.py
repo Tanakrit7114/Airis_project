@@ -1,6 +1,7 @@
 # Phase 2.5 — Memory Supersession
 # app/memory/pipeline.py
 
+from app.memory.vector_index import MemoryVectorIndex
 from app.memory.extractor import MemoryExtractor
 from app.memory.validator import MemoryValidator
 from app.memory.deduplicator import MemoryDeduplicator
@@ -8,6 +9,8 @@ from app.memory.contradiction import ContradictionDetector
 from app.memory.importance import ImportanceScorer
 from app.memory.confidence import ConfidenceScorer
 from app.memory.store import MemoryStore
+
+from app.memory.vector_index import MemoryVectorIndex
 
 
 class MemoryPipeline:
@@ -33,6 +36,7 @@ class MemoryPipeline:
         importance_scorer=None,
         confidence_scorer=None,
         store=None,
+        vector_index=None,
     ):
 
         self.extractor = extractor or MemoryExtractor()
@@ -53,6 +57,16 @@ class MemoryPipeline:
             or ConfidenceScorer()
         )
         self.store = store or MemoryStore()
+        
+        self.vector_index = (
+            vector_index
+            or MemoryVectorIndex()
+        )
+        
+        self.vector_index = (
+            vector_index
+            or  MemoryVectorIndex()
+        )
 
     def extract(self, text):
         return self.extractor.extract(text)
@@ -243,6 +257,17 @@ class MemoryPipeline:
                     "expires_at",
                 ),
             )
+            
+            new_memory = self.store.get_memory_by_key(
+                memory["key"]
+            )
+            
+            # --------------------------------------------
+            # Index memory for semantic retrieval
+            # --------------------------------------------
+            self.vector_index.index_memory(
+                new_memory
+            )
 
             # --------------------------------------------
             # Retrieve the newly stored memory
@@ -280,6 +305,14 @@ class MemoryPipeline:
                         old_memory_id,
                         new_memory_id,
                     )
+
+            # --------------------------------------------
+            # Index memory for semantic search
+            # --------------------------------------------
+
+            self.vector_index.index_memory(
+                new_memory
+            )
 
             stored.append(new_memory)
 

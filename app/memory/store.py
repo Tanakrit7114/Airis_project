@@ -276,7 +276,6 @@ class MemoryStore:
         decay_rate=0.0,
         expires_at=None,
     ):
-
         tags = tags if tags is not None else []
         entities = entities if entities is not None else []
         relationships = (
@@ -285,22 +284,18 @@ class MemoryStore:
             else []
         )
 
-        # Human-readable memory content
         content = f"{key}: {value}"
 
         with self._connect() as con:
 
-            # ====================================================
-            # Check existing memory
-            # ====================================================
-
             existing = con.execute(
                 """
-                SELECT id
+                SELECT id, memory_id
                 FROM memories
                 WHERE memory_type = ?
                 AND subject = ?
                 AND key = ?
+                LIMIT 1
                 """,
                 (
                     memory_type,
@@ -314,7 +309,6 @@ class MemoryStore:
             # ====================================================
 
             if existing:
-
                 con.execute(
                     """
                     UPDATE memories
@@ -346,53 +340,58 @@ class MemoryStore:
                     ),
                 )
 
+                con.commit()
+
+                return existing["memory_id"]
+
             # ====================================================
             # Insert new memory
             # ====================================================
 
-            else:
+            memory_id = str(uuid.uuid4())
 
-                memory_id = str(uuid.uuid4())
-
-                con.execute(
-                    """
-                    INSERT INTO memories(
-                        memory_id,
-                        memory_type,
-                        subject,
-                        key,
-                        value,
-                        content,
-                        importance,
-                        confidence,
-                        source,
-                        tags,
-                        entities,
-                        relationships,
-                        decay_rate,
-                        expires_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        memory_id,
-                        memory_type,
-                        subject,
-                        key,
-                        value,
-                        content,
-                        importance,
-                        confidence,
-                        source,
-                        json.dumps(tags),
-                        json.dumps(entities),
-                        json.dumps(relationships),
-                        decay_rate,
-                        expires_at,
-                    ),
+            con.execute(
+                """
+                INSERT INTO memories(
+                    memory_id,
+                    memory_type,
+                    subject,
+                    key,
+                    value,
+                    content,
+                    importance,
+                    confidence,
+                    source,
+                    tags,
+                    entities,
+                    relationships,
+                    decay_rate,
+                    expires_at
                 )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    memory_id,
+                    memory_type,
+                    subject,
+                    key,
+                    value,
+                    content,
+                    importance,
+                    confidence,
+                    source,
+                    json.dumps(tags),
+                    json.dumps(entities),
+                    json.dumps(relationships),
+                    decay_rate,
+                    expires_at,
+                ),
+            )
 
             con.commit()
+
+            return memory_id
+                
 
     # ========================================================
     # Get single Memory V2
