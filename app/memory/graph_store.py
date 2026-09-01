@@ -26,7 +26,7 @@ class MemoryGraphStore:
 
         self._memory_connection = None
 
-        if self.db_path == ":memory__":
+        if self.db_path == ":memory:":
             self._memory_connection = sqlite3.connect(
                 ":memory:"
             )
@@ -219,6 +219,26 @@ class MemoryGraphStore:
             )
             for row in rows
         ]
+
+    def load_into_graph(self, graph):
+        """
+        Load all persistent links into an in-memory MemoryGraph.
+        """
+        if graph is None:
+            return 0
+
+        links = self.all_links()
+
+        for link in links:
+            graph.add_link(
+                source_id=link.source_id,
+                target_id=link.target_id,
+                relation=link.relation,
+                strength=link.strength,
+            )
+
+        return len(links)
+
 
     # ========================================================
     # Get outgoing links

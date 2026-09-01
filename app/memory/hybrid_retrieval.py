@@ -160,6 +160,233 @@ class HybridMemoryRetriever:
             len(overlap)
             / len(query_words)
         )
+        
+    def _intent_key_score(self, query, memory):
+            """
+            Estimate how strongly the query matches
+            the semantic meaning of a memory key.
+            """
+
+            if not isinstance(query, str):
+                return 0.0
+
+            query = self._normalize_text(query)
+
+            key = self._normalize_text(
+                memory.get("key", "")
+            )
+
+            if not query or not key:
+                return 0.0
+
+            # ------------------------------------------------
+            # Query intent → memory key
+            # ------------------------------------------------
+
+            intent_map = {
+                "favorite_programming_language": [
+                    "programming language",
+                    "language do i like",
+                    "language do i prefer",
+                    "favorite language",
+                    "coding language",
+                ],
+
+                "current_project": [
+                    "what am i building",
+                    "what am i working on",
+                    "current project",
+                    "project am i working on",
+                    "what project",
+                    "building",
+                ],
+
+                "major": [
+                    "what do i study",
+                    "what am i majoring in",
+                    "my major",
+                    "what do i study at university",
+                    "field of study",
+                ],
+
+                "favorite_drink": [
+                    "what do i drink",
+                    "drink do i like",
+                    "favorite drink",
+                    "what drink",
+                ],
+
+                "favorite_food": [
+                    "what food do i like",
+                    "favorite food",
+                    "food do i like",
+                    "what kind of food",
+                ],
+
+                "favorite_color": [
+                    "what color do i like",
+                    "favorite color",
+                    "color do i like",
+                ],
+
+                "hardware": [
+                    "what computer",
+                    "what laptop",
+                    "what machine",
+                    "computer am i using",
+                    "laptop do i have",
+                    "machine do i work on",
+                ],
+
+                "preference": [
+                    "what do i normally use",
+                    "what do i usually use",
+                    "what do i use for programming",
+                    "what do i use for ai",
+                ],
+            }
+
+            patterns = intent_map.get(key, [])
+
+            for pattern in patterns:
+                if pattern in query:
+                    return 1.0
+
+            # ------------------------------------------------
+            # Word-level intent matching
+            # ------------------------------------------------
+
+            query_words = set(query.split())
+
+            best_score = 0.0
+
+            for pattern in patterns:
+                pattern_words = set(
+                    pattern.split()
+                )
+
+                if not pattern_words:
+                    continue
+
+                overlap = (
+                    query_words & pattern_words
+                )
+
+                score = (
+                    len(overlap)
+                    / len(pattern_words)
+                )
+
+                best_score = max(
+                    best_score,
+                    score,
+                )
+
+            return best_score
+        
+    def _detect_query_intent(self, query):
+        """
+        Detect the type of memory the user is asking for.
+        Returns the expected memory key or None.
+        """
+
+        if not isinstance(query, str):
+            return None
+
+        q = query.lower().strip()
+
+        # Programming language
+        if (
+            "programming language" in q
+            or "language do i prefer" in q
+            or "language do i like" in q
+        ):
+            return "favorite_programming_language"
+
+        # Programming usage
+        if (
+            "use for programming" in q
+            or "normally use for programming" in q
+        ):
+            return "preference"
+        
+                # Programming usage
+        # Must come before favorite programming language
+        # because "preferred coding language" can refer to usage.
+        if (
+            "usually code in" in q
+            or "normally code in" in q
+            or "use for programming" in q
+            or "normally use for programming" in q
+            or "usually use for programming" in q
+            or "use for coding" in q
+            or "usually use for coding" in q
+            or "normally use for coding" in q
+        ):
+            return "preference"
+
+        # Favorite programming language
+        if (
+            "programming language" in q
+            or "coding language do i like" in q
+            or "language do i prefer" in q
+            or "language do i like" in q
+            or "coding language do i prefer" in q
+            or "preferred coding language" in q
+        ):
+            return "favorite_programming_language"
+        
+        # Drink
+        if (
+            "what do i drink" in q
+            or "drink do i like" in q
+            or "favorite drink" in q
+        ):
+            return "favorite_drink"
+
+        # Food
+        if (
+            "what kind of food" in q
+            or "food do i like" in q
+            or "favorite food" in q
+        ):
+            return "favorite_food"
+
+        # Color
+        if (
+            "what color" in q
+            or "color do i like" in q
+            or "favorite color" in q
+        ):
+            return "favorite_color"
+
+        # Hardware
+        if (
+            "what laptop" in q
+            or "what computer" in q
+            or "what machine" in q
+            or "hardware" in q
+        ):
+            return "hardware"
+
+        # Current project
+        if (
+            "what project" in q
+            or "currently working on" in q
+            or "what am i building" in q
+            or "what i'm building" in q
+        ):
+            return "current_project"
+
+        # Major / study
+        if (
+            "what do i study" in q
+            or "what am i majoring in" in q
+            or "my major" in q
+        ):
+            return "major"
+
+        return None
 
     # ========================================================
     # Search
@@ -373,9 +600,30 @@ class HybridMemoryRetriever:
             ):
                 continue
 
+            memory_id = memory.get("memory_id")
+
+            semantic_score = semantic_by_id.get(
+                str(memory_id),
+                0.0,
+            )
+
+            exact_score = self._exact_match_score(
+                query,
+                memory,
+            )
+
+            intent_key = self._detect_query_intent(query)
+
+            intent_boost = 0.0
+
+            if intent_key is not None:
+                if str(memory.get("key")) == intent_key:
+                    intent_boost = 0.20
+
             hybrid_score = (
-                0.7 * similarity
-                + 0.3 * exact_score
+                0.70 * similarity
+                + 0.30 * exact_score
+                + intent_boost
             )
 
             result = dict(memory)

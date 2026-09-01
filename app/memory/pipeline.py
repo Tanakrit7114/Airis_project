@@ -9,8 +9,10 @@ from app.memory.contradiction import ContradictionDetector
 from app.memory.importance import ImportanceScorer
 from app.memory.confidence import ConfidenceScorer
 from app.memory.store import MemoryStore
-
-from app.memory.vector_index import MemoryVectorIndex
+from app.memory.memory_graph import MemoryGraph
+from app.memory.graph_store import MemoryGraphStore
+from app.memory.auto_linker import MemoryAutoLinker
+from app.memory.hybrid_retrieval import HybridMemoryRetriever
 
 
 class MemoryPipeline:
@@ -28,40 +30,85 @@ class MemoryPipeline:
     """
 
     def __init__(
-        self,
-        extractor=None,
-        validator=None,
-        deduplicator=None,
-        contradiction_detector=None,
-        importance_scorer=None,
-        confidence_scorer=None,
-        store=None,
-        vector_index=None,
-    ):
+            self,
+            extractor=None,
+            validator=None,
+            deduplicator=None,
+            contradiction_detector=None,
+            importance_scorer=None,
+            confidence_scorer=None,
+            store=None,
+            vector_index=None,
+            graph=None,
+            auto_linker=None,
+        ):
 
-        self.extractor = extractor or MemoryExtractor()
-        self.validator = validator or MemoryValidator()
-        self.deduplicator = (
-            deduplicator or MemoryDeduplicator()
-        )
-        self.contradiction_detector = (
-            contradiction_detector
-            or ContradictionDetector()
-        )
-        self.importance_scorer = (
-            importance_scorer
-            or ImportanceScorer()
-        )
-        self.confidence_scorer = (
-            confidence_scorer
-            or ConfidenceScorer()
-        )
-        self.store = store or MemoryStore()
-        
-        self.vector_index = (
-            vector_index
-            or MemoryVectorIndex()
-        )
+            self.extractor = extractor or MemoryExtractor()
+            self.validator = validator or MemoryValidator()
+
+            self.deduplicator = (
+                deduplicator
+                or MemoryDeduplicator()
+            )
+
+            self.contradiction_detector = (
+                contradiction_detector
+                or ContradictionDetector()
+            )
+
+            self.importance_scorer = (
+                importance_scorer
+                or ImportanceScorer()
+            )
+
+            self.confidence_scorer = (
+                confidence_scorer
+                or ConfidenceScorer()
+            )
+
+            self.store = store or MemoryStore()
+
+            self.vector_index = (
+                vector_index
+                or MemoryVectorIndex()
+            )
+
+            # ====================================================
+            # Memory Graph
+            # ====================================================
+
+            self.graph = (
+                graph
+                if graph is not None
+                else MemoryGraph()
+            )
+
+            # ====================================================
+            # Persistent Memory Graph
+            # ====================================================
+
+            self.graph_store = MemoryGraphStore()
+
+            self.graph_store.load_into_graph(
+                self.graph
+            )
+
+            # ====================================================
+            # Automatic Memory Linking
+            # ====================================================
+
+            self.auto_linker = (
+                auto_linker
+                or MemoryAutoLinker(
+                    store=self.store,
+                    graph=self.graph,
+                    graph_store=self.graph_store,
+                    retriever=HybridMemoryRetriever(
+                        store=self.store,
+                        vector_index=self.vector_index,
+                    ),
+                )
+            )
 
     def extract(self, text):
         return self.extractor.extract(text)
@@ -114,8 +161,10 @@ class MemoryPipeline:
         if not text:
             return []
 
-        # If caller does not provide memories,
-        # retrieve active memories from the store.
+        # ----------------------------------------------------
+        # Retrieve active memories
+        # ----------------------------------------------------
+
         if existing_memories is None:
             existing_memories = (
                 self.store.active_memories()
@@ -183,7 +232,10 @@ class MemoryPipeline:
         for memory in memories:
             self.score_confidence(memory)
 
-        return memories
+        # ==========================================
+        # 7. Store + Index + Auto Link
+        # ==========================================
+        return self.store_memories(memories)
 
     # ========================================================
     # Store
@@ -252,20 +304,9 @@ class MemoryPipeline:
                     "expires_at",
                 ),
             )
-            
-            new_memory = self.store.get_memory_by_key(
-                memory["key"]
-            )
-            
-            # --------------------------------------------
-            # Index memory for semantic retrieval
-            # --------------------------------------------
-            self.vector_index.index_memory(
-                new_memory
-            )
 
             # --------------------------------------------
-            # Retrieve the newly stored memory
+            # Retrieve stored memory
             # --------------------------------------------
 
             new_memory = self.store.get_memory_by_key(
@@ -273,8 +314,15 @@ class MemoryPipeline:
             )
 
             if not new_memory:
+                memory["contradictions"] = contradictions
                 stored.append(memory)
                 continue
+
+            # --------------------------------------------
+            # Attach contradiction information
+            # --------------------------------------------
+
+            new_memory["contradictions"] = contradictions
 
             # --------------------------------------------
             # Supersede contradictions
@@ -309,6 +357,91 @@ class MemoryPipeline:
                 new_memory
             )
 
+            # --------------------------------------------
+            # Auto-link related memories
+            # --------------------------------------------
+
+            new_memory_id = new_memory.get(
+                "memory_id"
+            )
+
+            if new_memory_id:
+
+                self.auto_linker.auto_link(
+                    memory_id=new_memory_id,
+                    limit=5,
+                    min_relationship=0.30,
+                )
+
+            # --------------------------------------------
+            # Add to result ONCE
+            # --------------------------------------------
+
             stored.append(new_memory)
 
         return stored
+    
+    def build_memory_graph(self):
+        """
+        Build a graph from active memories.
+        """
+
+        memories = self.store.active_memories()
+
+        # Clear current graph
+        self.graph = MemoryGraph()
+
+        # ----------------------------------------------------
+        # Add memory nodes
+        # ----------------------------------------------------
+
+        for memory in memories:
+            key = memory.get("key")
+
+            if not key:
+                continue
+
+            self.graph.add_node(
+                key,
+                memory.get("value"),
+                "memory",
+            )
+
+        # ----------------------------------------------------
+        # Known semantic relationships
+        # ----------------------------------------------------
+
+        relationships = {
+            "current_project": [
+                ("favorite_programming_language", "uses"),
+                ("preference", "related_to"),
+                ("hardware", "runs_on"),
+            ],
+
+            "preference": [
+                ("favorite_programming_language", "related_to"),
+            ],
+        }
+
+        # ----------------------------------------------------
+        # Add edges
+        # ----------------------------------------------------
+
+        for source, targets in relationships.items():
+
+            if source not in self.graph.nodes:
+                continue
+
+            for target, relation in targets:
+
+                if target not in self.graph.nodes:
+                    continue
+
+                self.graph.add_edge(
+                    source,
+                    target,
+                    relation,
+                )
+
+        return self.graph
+    

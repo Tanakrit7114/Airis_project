@@ -14,6 +14,7 @@ class MemoryAutoLinker:
         self,
         store,
         graph=None,
+        graph_store=None,
         retriever=None,
     ):
         self.store = store
@@ -23,6 +24,8 @@ class MemoryAutoLinker:
             if graph is not None
             else MemoryGraph()
         )
+
+        self.graph_store = graph_store
 
         self.retriever = (
             retriever
@@ -173,6 +176,14 @@ class MemoryAutoLinker:
                 relation=relation,
                 strength=strength,
             )
+
+            if self.graph_store is not None:
+                self.graph_store.add_link(
+                    source_id=memory_id,
+                    target_id=candidate_id,
+                    relation=relation,
+                    strength=strength,
+                )
 
             linked.append(link)
 
@@ -366,14 +377,26 @@ class MemoryAutoLinker:
                         == str(second_memory_id)
                     ):
                         try:
-                            semantic_score = float(
-                                result.get(
-                                    "similarity",
-                                    result.get(
-                                        "hybrid_score",
-                                        0.0,
-                                    ),
-                                )
+                            similarity = result.get("similarity")
+
+                            hybrid_score = result.get(
+                                "hybrid_score",
+                                0.0,
+                            )
+
+                            try:
+                                similarity = float(similarity)
+                            except (TypeError, ValueError):
+                                similarity = 0.0
+
+                            try:
+                                hybrid_score = float(hybrid_score)
+                            except (TypeError, ValueError):
+                                hybrid_score = 0.0
+
+                            semantic_score = max(
+                                similarity,
+                                hybrid_score,
                             )
                         except (
                             TypeError,
@@ -457,11 +480,11 @@ class MemoryAutoLinker:
         # ----------------------------------------------------
 
         score = (
-            0.30 * entity_score
-            + 0.25 * tag_score
-            + 0.15 * type_score
-            + 0.15 * subject_score
-            + 0.10 * semantic_score
+            0.45 * semantic_score
+            + 0.25 * entity_score
+            + 0.15 * tag_score
+            + 0.05 * type_score
+            + 0.05 * subject_score
             + 0.025 * importance_score
             + 0.025 * confidence_score
         )
@@ -601,6 +624,14 @@ class MemoryAutoLinker:
                 relation=relation,
                 strength=score,
             )
+
+            if self.graph_store is not None:
+                self.graph_store.add_link(
+                    source_id=memory_id,
+                    target_id=candidate_id,
+                    relation=relation,
+                    strength=score,
+                )
 
             linked.append(link)
 
