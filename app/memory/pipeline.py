@@ -62,11 +62,6 @@ class MemoryPipeline:
             vector_index
             or MemoryVectorIndex()
         )
-        
-        self.vector_index = (
-            vector_index
-            or  MemoryVectorIndex()
-        )
 
     def extract(self, text):
         return self.extractor.extract(text)
