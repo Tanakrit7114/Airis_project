@@ -1,0 +1,26 @@
+import os
+from dotenv import load_dotenv
+load_dotenv()
+MODEL = os.getenv("MODEL", "qwen3.6:35b-a3b-q4_K_M")
+RAG_MODEL = os.getenv("RAG_MODEL", MODEL)
+LLM_BACKEND = os.getenv("LLM_BACKEND", "auto").lower()
+RAG_BACKEND = os.getenv("RAG_BACKEND", LLM_BACKEND).lower()
+LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", os.getenv("MODEL", "models/qwen3-8b-q4.gguf"))
+SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8080")
+MEMORY_DB = os.getenv("MEMORY_DB", "data/jarvis.db")
+MAX_CONTEXT_TOKENS = int(os.getenv("MAX_CONTEXT_TOKENS", "6000"))
+MAX_GENERATION_TOKENS = int(os.getenv("MAX_GENERATION_TOKENS", "1536"))
+MAX_CONTINUATIONS = int(os.getenv("MAX_CONTINUATIONS", "2"))
+CONTINUATION_MIN_RATIO = float(os.getenv("CONTINUATION_MIN_RATIO", "0.92"))
+TEMPERATURE = float(os.getenv("TEMPERATURE", "0.3"))
+TOP_P = float(os.getenv("TOP_P", "0.9"))
+LLM_RESPONSE_TIMEOUT = float(os.getenv("LLM_RESPONSE_TIMEOUT", "180"))
+LLM_FALLBACK_RESPONSE = os.getenv("LLM_FALLBACK_RESPONSE", "ขออภัยครับ ระบบ AI ยังไม่สามารถสร้างคำตอบได้ในขณะนี้ กรุณาลองอีกครั้ง หรือลองเปลี่ยนโมเดลในเมนู Model")
+ENABLE_SEARCH = os.getenv("ENABLE_SEARCH", "true").lower() == "true"
+IMAGE_MODEL = os.getenv("IMAGE_MODEL", "black-forest-labs/FLUX.2-klein-4B")
+IMAGE_OUTPUT_DIR = os.getenv("IMAGE_OUTPUT_DIR", "data/generated_images")
+IMAGE_STEPS = int(os.getenv("IMAGE_STEPS", "4"))
+IMAGE_WIDTH = int(os.getenv("IMAGE_WIDTH", "1024"))
+IMAGE_HEIGHT = int(os.getenv("IMAGE_HEIGHT", "1024"))
+IMAGE_QUANTIZE = int(os.getenv("IMAGE_QUANTIZE", "8"))
+IMAGE_KEEP_LOADED = os.getenv("IMAGE_KEEP_LOADED", "false").lower() == "true"

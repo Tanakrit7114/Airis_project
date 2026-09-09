@@ -1,0 +1,28 @@
+export async function api<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(path, { headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) }, ...options })
+  if (!response.ok) throw new Error(await response.text())
+  return response.json()
+}
+export const getSessions=()=>api<any[]>('/api/chat/sessions')
+export const createSession=(title?:string)=>api<any>('/api/chat/sessions',{method:'POST',body:JSON.stringify({title})})
+export const getSession=(id:string)=>api<any>(`/api/chat/sessions/${id}`)
+export const deleteSession=(id:string)=>api<any>(`/api/chat/sessions/${id}`,{method:'DELETE'})
+export const getSystem=()=>api<any>('/api/dashboard/system')
+export const getAnalytics=()=>api<any>('/api/dashboard/analytics')
+export const getMemories=(query='')=>api<any>(`/api/dashboard/memory?limit=200${query?`&query=${encodeURIComponent(query)}`:''}`)
+export const getGraph=()=>api<any>('/api/dashboard/memory/graph')
+export const getLogs=(kind:string)=>api<any>(`/api/dashboard/${kind}`)
+export const getModels=()=>api<any>('/api/models')
+export const selectModel=(model:string,backend?:string)=>api<any>('/api/models/select',{method:'POST',body:JSON.stringify({model,backend})})
+export const selectRagModel=(model:string,backend?:string)=>api<any>('/api/models/rag/select',{method:'POST',body:JSON.stringify({model,backend})})
+export function connectChat(onMessage:(data:any)=>void,onOpen?:()=>void,onError?:(e:Event)=>void){const protocol=location.protocol==='https:'?'wss':'ws';const ws=new WebSocket(`${protocol}://${location.host}/ws/chat`);ws.onopen=()=>onOpen?.();ws.onmessage=e=>onMessage(JSON.parse(e.data));ws.onerror=e=>onError?.(e);return ws}
+export async function uploadDocument(file:File,allowCloud=false){const form=new FormData();form.append('file',file);form.append('allow_cloud',String(allowCloud));const response=await fetch('/api/documents/upload',{method:'POST',body:form});if(!response.ok)throw new Error(await response.text());return response.json()}
+export const getDocuments=(limit=100)=>api<any>(`/api/documents?limit=${limit}`)
+export const getDocument=(id:string)=>api<any>(`/api/documents/${id}`)
+export const getImageStatus=()=>api<any>('/api/images/status')
+export const generateImage=(prompt:string,opts:any={})=>api<any>('/api/images/generate',{method:'POST',body:JSON.stringify({prompt,...opts})})
+export const getExtensions=()=>api<any[]>('/api/extensions')
+export const getExtensionAuthUrl=(id:string)=>api<any>(`/api/extensions/${id}/connect`)
+export const disconnectExtension=(id:string)=>api<any>(`/api/extensions/${id}/disconnect`,{method:'POST'})
+export const testExtension=(id:string)=>api<any>(`/api/extensions/${id}/test`)
+export const extensionAction=(id:string,action:string,query='')=>api<any>(`/api/extensions/${id}/action`,{method:'POST',body:JSON.stringify({action,query})})

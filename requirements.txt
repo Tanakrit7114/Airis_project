@@ -1,0 +1,25 @@
+# Core, cross-platform
+python-dotenv>=1.0
+requests>=2.32
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.7
+pytest>=8.0
+python-multipart>=0.0.20
+pymupdf>=1.26.0
+pillow>=11.0.0
+python-docx>=1.1.2
+pytesseract>=0.3.13
+numpy>=1.26
+mcp==1.30.0
+
+# Non-Apple runtime (CPU by default; CUDA can be enabled when building llama-cpp-python)
+llama-cpp-python>=0.3.35; platform_system != "Darwin" or platform_machine != "arm64"
+
+# Apple Silicon only
+mlx>=0.32.0; platform_system == "Darwin" and platform_machine == "arm64"
+mlx-lm>=0.31.0; platform_system == "Darwin" and platform_machine == "arm64"
+mlx-embeddings; platform_system == "Darwin" and platform_machine == "arm64"
+mflux>=0.19.1,<0.20; platform_system == "Darwin" and platform_machine == "arm64"
+pyobjc-framework-Vision>=10.3; platform_system == "Darwin" and platform_machine == "arm64"
+pyobjc-framework-Quartz>=10.3; platform_system == "Darwin" and platform_machine == "arm64"

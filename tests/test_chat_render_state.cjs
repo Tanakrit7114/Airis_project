@@ -1,0 +1,22 @@
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const esbuild = require('../web/node_modules/esbuild')
+const Module = require('node:module')
+const code=esbuild.transformSync(fs.readFileSync(require('node:path').join(__dirname,'../web/src/chatState.ts'),'utf8'),{loader:'ts',format:'cjs'}).code
+const mod=new Module('chat-state');mod._compile(code,'chat-state.cjs')
+const {hydrateMessage,updateResponse}=mod.exports
+const initial=[{id:'u',role:'user',content:'hello'},{id:'a',role:'assistant',content:''},{id:'draft',role:'user',content:'next'}]
+let messages=updateResponse(initial,'a',{type:'token',text:'Hello'})
+messages=updateResponse(messages,'a',{type:'done',answer:'Hello world'})
+assert.equal(messages[1].content,'Hello world')
+assert.equal(messages[2].content,'next')
+assert.equal(initial[1].content,'')
+assert.equal(updateResponse(initial,'a',{type:'done',answer:'No streamed tokens'})[1].content,'No streamed tokens')
+messages=updateResponse(initial,'a',{type:'image',url:'/generated/test.png'})
+messages=updateResponse(messages,'a',{type:'done',answer:'Image ready',source:'image'})
+assert.equal(messages[1].image,'/generated/test.png')
+assert.equal(hydrateMessage({metadata:{image:{url:'/generated/test.png'}}}).image,'/generated/test.png')
+assert.equal(hydrateMessage({content:'old'}).done,true)
+assert.equal(updateResponse(initial,'a',{type:'error',message:'Image failed'})[1].content,'Image failed')
+assert.deepEqual(updateResponse(initial,'unknown',{type:'token',text:'stale'}),initial)
+console.log('Chat regressions passed: targeted streaming, no-token replies, image history, errors, stale IDs.')
