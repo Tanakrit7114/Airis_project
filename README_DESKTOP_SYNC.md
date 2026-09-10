@@ -1,4 +1,9 @@
-# Web + Desktop update (2026-09-09)
+# Web + Desktop update (2026-09-10)
+
+## Web sync / Desktop runtime — 0.2.3
+
+- Airis Desktop starts the local Universal Airis runtime automatically when port 8001 is unavailable, waits for `/api/health`, and shows a retry/log screen instead of a blank Chromium error page.
+- The installed macOS app is version 0.2.3; the runtime remains local-only and uses `/Users/tanakrit/Desktop/Universal Airis` by default (a different runtime folder can be selected from the recovery screen).
 
 ## Start
 
@@ -43,9 +48,14 @@ Custom MCP servers and additional services are still pending, not implicitly ena
 
 ## Tests / remaining work
 
-27 targeted Python tests and 17 Desktop backend tests passed; Desktop Electron regression passed.
+368 project tests passed; Docker sandbox integration covers Python, JavaScript, TypeScript,
+Bash, SQL, C, C++ and C#; MCP connector tests include a real local streamable-HTTP server.
+The remaining skipped tests require external KKU/OAuth services or platform-specific hardware.
+Desktop Electron regression passed.
 Browser verified Chat, consent controls, Extensions list and HTTP 200.
 Cloud fallback uses mocks; no key, microphone/camera permission or external account was used.
 Operator consent is remembered separately per Web origin and Desktop runtime; both have a forget control.
-Remaining: live KKU/vision tests, OAuth accounts, MCP, code sandbox, hardware/location,
-full Web/Desktop parity, model capability discovery, and Windows installer verification.
+Remaining: live KKU/OCR and Vision tests, OAuth accounts, hardware/location, full Web/Desktop parity,
+model capability discovery, history summarization/evidence verification, multi-track YouTube queue,
+and Windows/Intel Mac installer verification. YouTube playback now attempts Play and Skip ad through
+the macOS accessibility tree and reports when playback cannot be verified; it is not a universal UI guarantee.

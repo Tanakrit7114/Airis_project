@@ -49,11 +49,13 @@ class ServerState:
         self.extensions = ExtensionManager()
         self.extension_tools = ExtensionToolManager(self.extensions)
         self.pending_actions = {}
+        self.chat_provider = "local"
+        self.kku_model = None
         self.assistant.extension_manager = self.extensions
         for tool_name in [
-            "gmail_search","gmail_read","gmail_send","drive_search","drive_read_file","drive_create_file",
-            "calendar_list_events","calendar_create_event","github_list_repos","github_read_file","github_create_issue",
-            "notion_search","notion_read_page","notion_update_page","slack_list_channels","slack_read_messages","slack_send_message",
+            "gmail_search","gmail_read","gmail_send","gmail_news_report","gmail_trash","drive_search","drive_read_file","drive_create_file","drive_update_file","drive_delete_file",
+            "calendar_list_events","calendar_create_event","calendar_update_event","calendar_delete_event","github_list_repos","github_read_file","github_create_issue","github_update_issue","github_close_issue",
+            "notion_search","notion_read_page","notion_update_page","notion_archive_page",
         ]:
             self.assistant.tool_registry.register(tool_name, lambda *args, _n=tool_name, **kwargs: self.extension_tools.execute(_n,*args,**kwargs), "JARVIS extension tool; use only when the corresponding extension is connected.")
 
@@ -106,10 +108,12 @@ async def websocket_chat(websocket: WebSocket):
 
 @app.get("/generated/{filename}")
 def generated_image(filename: str):
+    from fastapi import HTTPException
+
     base = Path(IMAGE_OUTPUT_DIR).resolve()
     target = (base / Path(filename).name).resolve()
     if base not in target.parents or not target.is_file():
-        return {"detail": "Image not found"}
+        raise HTTPException(404, "Image not found")
     return FileResponse(target)
 
 

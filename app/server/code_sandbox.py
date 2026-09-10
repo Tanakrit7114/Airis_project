@@ -9,7 +9,9 @@ import uuid
 RECIPES={
  'python':('python:3.12-alpine',['python','-']),
  'javascript':('node:24-alpine',['node','--input-type=module']),
- 'typescript':('node:24-alpine',['node','--input-type=module-typescript']),
+ # Node's strip-types flag applies reliably to a file; write stdin only to the
+ # disposable container workspace, then execute it as an ES module.
+ 'typescript':('node:24-alpine',['sh','-c','cat > /work/main.ts && node --experimental-strip-types /work/main.ts']),
  'bash':('bash:5.2',['bash','-s']),
  'sql':('python:3.12-alpine',['python','-c','import sqlite3,sys; c=sqlite3.connect(":memory:"); c.executescript(sys.stdin.read()); print("SQLite script completed")']),
  'c':('gcc:14',['sh','-c','cat > /work/main.c && gcc /work/main.c -o /work/main && /work/main']),

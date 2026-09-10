@@ -9,5 +9,5 @@
 .generated-image{max-width:min(100%,720px);margin:8px 0 24px 39px}
 .generated-image img{display:block;width:100%;height:auto;object-fit:contain;border-radius:12px}
 .image-actions{display:flex;gap:16px;padding:10px}
-.composer-row textarea{min-height:62px;max-height:180px;resize:vertical;overflow-y:auto}
+.composer-row textarea{min-height:62px;max-height:180px;resize:none;overflow-y:auto}
 @media(max-width:700px){.chat-page{height:calc(100dvh - 58px);min-height:0}.generated-image{margin-left:0}.header-controls{justify-content:flex-start}}

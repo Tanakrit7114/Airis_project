@@ -1,7 +1,23 @@
+async function responseError(response: Response, fallback = "Request failed") {
+  const raw = await response.text();
+  if (!raw) return fallback;
+  try {
+    const body = JSON.parse(raw);
+    if (typeof body?.detail === "string") return body.detail;
+    if (typeof body?.message === "string") return body.message;
+  } catch {
+    // Some proxy/runtime failures return plain text instead of JSON.
+  }
+  return raw;
+}
+
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(path, { headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) }, ...options })
-  if (!response.ok) throw new Error(await response.text())
-  return response.json()
+  const response = await fetch(path, {
+    headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
+    ...options,
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json();
 }
 export const getSessions=()=>api<any[]>('/api/chat/sessions')
 export const createSession=(title?:string)=>api<any>('/api/chat/sessions',{method:'POST',body:JSON.stringify({title})})
@@ -16,7 +32,19 @@ export const getModels=()=>api<any>('/api/models')
 export const selectModel=(model:string,backend?:string)=>api<any>('/api/models/select',{method:'POST',body:JSON.stringify({model,backend})})
 export const selectRagModel=(model:string,backend?:string)=>api<any>('/api/models/rag/select',{method:'POST',body:JSON.stringify({model,backend})})
 export function connectChat(onMessage:(data:any)=>void,onOpen?:()=>void,onError?:(e:Event)=>void){const protocol=location.protocol==='https:'?'wss':'ws';const ws=new WebSocket(`${protocol}://${location.host}/ws/chat`);ws.onopen=()=>onOpen?.();ws.onmessage=e=>onMessage(JSON.parse(e.data));ws.onerror=e=>onError?.(e);return ws}
-export async function uploadDocument(file:File,allowCloud=false){const form=new FormData();form.append('file',file);form.append('allow_cloud',String(allowCloud));const response=await fetch('/api/documents/upload',{method:'POST',body:form});if(!response.ok)throw new Error(await response.text());return response.json()}
+export async function uploadDocument(file:File,allowCloud=false){const form=new FormData();form.append('file',file);form.append('allow_cloud',String(allowCloud));const response=await fetch('/api/documents/upload',{method:'POST',body:form});if(!response.ok)throw new Error(await responseError(response,'Upload failed'));return response.json()}
+export async function mergePdfs(files:File[]){
+ const form=new FormData();
+ files.forEach(file=>form.append('files',file,file.name));
+ const response=await fetch('/api/documents/merge',{method:'POST',body:form});
+ if(!response.ok){
+  const raw=await response.text();
+  let detail='รวม PDF ไม่สำเร็จ';
+  try{const body=JSON.parse(raw);detail=body.detail||body.message||detail}catch{if(raw)detail=raw}
+  throw new Error(detail)
+ }
+ return response.blob();
+}
 export const getDocuments=(limit=100)=>api<any>(`/api/documents?limit=${limit}`)
 export const getDocument=(id:string)=>api<any>(`/api/documents/${id}`)
 export const getImageStatus=()=>api<any>('/api/images/status')

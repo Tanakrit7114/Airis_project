@@ -96,7 +96,18 @@ class DashboardDB:
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (session_id, role, content, source, route, int(requires_confirmation), json.dumps(metadata or {}, ensure_ascii=False)),
             )
-            con.execute("UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (session_id,))
+            # Give a newly-created conversation a useful Recent label after its
+            # first user message, while preserving explicit/manual titles.
+            if role == "user":
+                row = con.execute("SELECT title FROM chat_sessions WHERE id = ?", (session_id,)).fetchone()
+                if row and row["title"] == "New conversation":
+                    title = " ".join(str(content).split()).strip()[:72] or "New conversation"
+                    con.execute("UPDATE chat_sessions SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                                (title, session_id))
+                else:
+                    con.execute("UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (session_id,))
+            else:
+                con.execute("UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (session_id,))
             con.commit()
             return int(cur.lastrowid)
 

@@ -32,12 +32,12 @@ def callback(provider: str, code: str | None = Query(None), state: str | None = 
     if error:
         return HTMLResponse(f"<html><body><h2>JARVIS Extension</h2><p>Authorization failed: {quote(error)}</p><script>window.close()</script></body></html>", status_code=400)
     if not code or not state:
-        return HTMLResponse("<html><body><h2>JARVIS Extension</h2><p>OAuth callback ขาด code/state</p></body></html>", status_code=400)
+        return HTMLResponse("<html><body><h2>Airis Extension</h2><p>OAuth callback is missing code/state.</p></body></html>", status_code=400)
     try:
         extension_id = manager().handle_callback(provider, code, state)
     except Exception as exc:
-        return HTMLResponse(f"<html><body><h2>JARVIS Extension</h2><p>เชื่อมต่อไม่สำเร็จ: {quote(str(exc))}</p></body></html>", status_code=400)
-    base = "<html><body><h2>เชื่อมต่อสำเร็จ</h2><p>JARVIS เชื่อมต่อ Extension เรียบร้อยแล้ว</p><script>window.opener && window.opener.postMessage({type:'jarvis-extension-connected',extension:'" + extension_id + "'}, '*'); window.close();</script></body></html>"
+        return HTMLResponse(f"<html><body><h2>Airis Extension</h2><p>Connection failed: {quote(str(exc))}</p></body></html>", status_code=400)
+    base = "<html><body><h2>Connected</h2><p>Airis connected the extension successfully.</p><script>window.opener && window.opener.postMessage({type:'jarvis-extension-connected',extension:'" + extension_id + "'}, '*'); window.close();</script></body></html>"
     return HTMLResponse(base)
 
 

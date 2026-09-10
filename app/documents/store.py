@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import MEMORY_DB
-from app.documents.ocr import process_document
+from app.documents.ocr import MAX_FILE_BYTES, process_document
 
 CHUNK_SIZE = 2400
 CHUNK_OVERLAP = 250
@@ -147,6 +147,8 @@ class DocumentStore:
             con.commit()
 
     def save(self, filename: str, content: bytes) -> dict[str, Any]:
+        if len(content) > MAX_FILE_BYTES:
+            raise ValueError("ไฟล์ใหญ่เกิน 25 MB")
         sha256 = hashlib.sha256(content).hexdigest()
         with self.connect() as con:
             existing = con.execute("SELECT * FROM documents WHERE sha256 = ?", (sha256,)).fetchone()
@@ -192,6 +194,7 @@ class DocumentStore:
         return {
             "id": document_id,
             "filename": Path(filename).name,
+            "download_url": f"/api/documents/{document_id}/download",
             "sha256": sha256,
             "mime_type": mime_type,
             "size_bytes": len(content),
@@ -205,9 +208,14 @@ class DocumentStore:
 
     @staticmethod
     def _row_dict(row: sqlite3.Row, reused: bool = False) -> dict[str, Any]:
+        document_id = row["id"]
         return {
-            "id": row["id"],
+            "id": document_id,
             "filename": row["filename"],
+            # Keep download links in every document response so clients do
+            # not need to reconstruct API paths (and so list views can offer
+            # a download action without fetching the full document first).
+            "download_url": f"/api/documents/{document_id}/download",
             "sha256": row["sha256"],
             "mime_type": row["mime_type"],
             "size_bytes": row["size_bytes"],

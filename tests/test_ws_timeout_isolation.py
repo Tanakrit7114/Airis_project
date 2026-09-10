@@ -33,6 +33,7 @@ def test_late_tokens_cannot_enter_next_chat(monkeypatch):
             return "CURRENT ANSWER"
         state=SimpleNamespace(
             active_connections=0,lock=asyncio.Lock(),db=DB(),
+            chat_provider="local",kku_model=None,
             documents=SimpleNamespace(search=lambda *a,**k:[]),
             assistant=SimpleNamespace(
                 chat=chat,router=SimpleNamespace(route=lambda _:"general"),

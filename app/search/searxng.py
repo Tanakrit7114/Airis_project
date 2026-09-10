@@ -14,8 +14,15 @@ class SearXNG:
                     "format": "json",
                     "categories": "general",
                 },
+                headers={"Accept":"application/json","User-Agent":"Airis/1.0 local research client"},
                 timeout=10,
             )
+            if getattr(response, "status_code", 200) in {401,403}:
+                # Some local SearXNG installations disable JSON/HTML output.
+                # Use the public metadata provider instead of surfacing the
+                # local gateway error to the chat UI.
+                from app.search.public_web import search_web
+                return search_web(query, limit)
             response.raise_for_status()
             data = response.json()
             results = []

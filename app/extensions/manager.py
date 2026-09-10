@@ -29,34 +29,29 @@ class ExtensionDefinition:
 
 EXTENSIONS = (
     ExtensionDefinition(
-        "gmail", "Gmail", "Google", "อ่านและค้นหาอีเมล", "✉", "google",
+        "gmail", "Gmail", "Google", "Read and search email", "✉", "google",
         ("https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.send"),
-        ("อ่านอีเมลล่าสุด", "ค้นหาอีเมล"),
+        ("Read recent email", "Search email"),
     ),
     ExtensionDefinition(
-        "drive", "Google Drive", "Google", "ค้นหาและอ่านไฟล์บน Drive", "△", "google",
+        "drive", "Google Drive", "Google", "Search and read Drive files", "△", "google",
         ("https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/drive.file"),
-        ("ค้นหาไฟล์", "อ่าน metadata"),
+        ("Search files", "Read metadata"),
     ),
     ExtensionDefinition(
-        "calendar", "Google Calendar", "Google", "ดูตารางนัดหมายและกิจกรรม", "31", "google",
+        "calendar", "Google Calendar", "Google", "View appointments and events", "31", "google",
         ("https://www.googleapis.com/auth/calendar.readonly", "https://www.googleapis.com/auth/calendar.events"),
-        ("ดูกิจกรรมที่จะมาถึง",),
+        ("View upcoming events",),
     ),
     ExtensionDefinition(
-        "github", "GitHub", "Developer", "อ่าน repository และข้อมูลบัญชี", "●", "github",
+        "github", "GitHub", "Developer", "Read repositories and account data", "●", "github",
         ("read:user", "user:email", "repo"),
-        ("ดู repository", "ดู profile"),
+        ("View repositories", "View profile"),
     ),
     ExtensionDefinition(
-        "notion", "Notion", "Workspace", "ค้นหาและอ่านหน้าที่แชร์ให้ connection", "N", "notion",
+        "notion", "Notion", "Workspace", "Search and read pages shared with this connection", "N", "notion",
         ("read_content", "update_content"),
-        ("ค้นหา page", "อ่าน page", "แก้ไข page"),
-    ),
-    ExtensionDefinition(
-        "slack", "Slack", "Workspace", "อ่าน workspace และ channel ที่อนุญาต", "#", "slack",
-        ("channels:read", "groups:read", "chat:write", "channels:history", "groups:history"),
-        ("ดู channel", "อ่านประวัติข้อความที่อนุญาต"),
+        ("Search pages", "Read pages", "Edit pages"),
     ),
 )
 
@@ -148,8 +143,6 @@ class ExtensionManager:
             return os.getenv("GITHUB_CLIENT_ID"), os.getenv("GITHUB_CLIENT_SECRET")
         if provider == "notion":
             return os.getenv("NOTION_CLIENT_ID"), os.getenv("NOTION_CLIENT_SECRET")
-        if provider == "slack":
-            return os.getenv("SLACK_CLIENT_ID"), os.getenv("SLACK_CLIENT_SECRET")
         return None, None
 
     def _redirect_uri(self, provider: str) -> str:
@@ -181,15 +174,13 @@ class ExtensionManager:
             }
             return "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
         if ext.provider == "github":
-            params = {"client_id": client_id, "redirect_uri": self._redirect_uri("github"), "scope": "read:user user:email", "state": state}
+            # Keep the authorization request aligned with the scopes checked
+            # by _request and used by the GitHub actions.
+            params = {"client_id": client_id, "redirect_uri": self._redirect_uri("github"), "scope": " ".join(ext.scopes), "state": state}
             return "https://github.com/login/oauth/authorize?" + urlencode(params)
         if ext.provider == "notion":
             params = {"owner": "user", "client_id": client_id, "redirect_uri": self._redirect_uri("notion"), "response_type": "code", "state": state}
             return "https://api.notion.com/v1/oauth/authorize?" + urlencode(params)
-        if ext.provider == "slack":
-            scopes = sorted({s for e in EXTENSIONS if e.provider == "slack" for s in e.scopes})
-            params = {"client_id": client_id, "scope": ",".join(scopes), "redirect_uri": self._redirect_uri("slack"), "state": state}
-            return "https://slack.com/oauth/v2/authorize?" + urlencode(params)
         raise RuntimeError("Unknown provider")
 
     def handle_callback(self, provider: str, code: str, state: str):
@@ -211,8 +202,6 @@ class ExtensionManager:
             resp = requests.post("https://github.com/login/oauth/access_token", data={"code": code, "client_id": client_id, "client_secret": client_secret, "redirect_uri": redirect_uri, "state": state}, headers={"Accept": "application/json"}, timeout=30)
         elif provider == "notion":
             resp = requests.post("https://api.notion.com/v1/oauth/token", json={"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri}, auth=(client_id, client_secret), timeout=30)
-        elif provider == "slack":
-            resp = requests.post("https://slack.com/api/oauth.v2.access", data={"code": code, "client_id": client_id, "client_secret": client_secret, "redirect_uri": redirect_uri}, timeout=30)
         else:
             raise RuntimeError("Unknown provider")
         resp.raise_for_status()
@@ -261,6 +250,10 @@ class ExtensionManager:
             self._save_token(extension_id, token)
             headers["Authorization"] = f"Bearer {token.get('access_token')}"
             resp = requests.request(method, url, headers=headers, timeout=30, **kwargs)
+        if resp.status_code == 401:
+            # Do not advertise a stale token as connected. The next attempt
+            # must go through OAuth again instead of repeatedly returning 401.
+            self.disconnect(extension_id)
         resp.raise_for_status()
         return resp.json()
 
@@ -288,9 +281,6 @@ class ExtensionManager:
         if ext.provider == "notion":
             info = self._request(extension_id, "GET", "https://api.notion.com/v1/users/me", headers={"Notion-Version": os.getenv("NOTION_VERSION", "2026-03-11")})
             return {"ok": True, "account": (info.get("name") or "Notion connection")}
-        if ext.provider == "slack":
-            info = self._request(extension_id, "GET", "https://slack.com/api/auth.test")
-            return {"ok": bool(info.get("ok")), "account": info.get("team")}
         return {"ok": False}
 
     def action(self, extension_id: str, action: str, query: str = "") -> dict[str, Any]:
@@ -306,12 +296,32 @@ class ExtensionManager:
                 raise RuntimeError("ต้องระบุ Gmail message id")
             data = self._request(extension_id, "GET", f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}", params={"format": "full"})
             return {"id": data.get("id"), "threadId": data.get("threadId"), "snippet": data.get("snippet"), "payload": data.get("payload", {})}
+        if extension_id == "gmail" and action == "trash":
+            message_id = query.strip()
+            if not message_id: raise RuntimeError("ต้องระบุ Gmail message id")
+            return self._request(extension_id, "POST", f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}/trash", json={})
         if extension_id == "gmail" and action == "send":
             import base64, email.utils
             if "|" not in query:
                 raise RuntimeError("รูปแบบส่งอีเมล: recipient | subject | body")
             recipient, subject, body = [part.strip() for part in query.split("|", 2)]
             raw = f"To: {recipient}\r\nSubject: {subject}\r\nDate: {email.utils.formatdate(localtime=True)}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n{body}"
+            encoded = base64.urlsafe_b64encode(raw.encode("utf-8")).decode().rstrip("=")
+            return self._request(extension_id, "POST", "https://gmail.googleapis.com/gmail/v1/users/me/messages/send", json={"raw": encoded})
+        if extension_id == "gmail" and action == "news_report":
+            import re as _re
+            from app.search.public_web import search_web
+            parts = [part.strip() for part in query.split("|", 2)]
+            if len(parts) != 3 or not _re.fullmatch(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", parts[0]):
+                raise RuntimeError("รูปแบบรายงานข่าว: recipient@example.com | หัวข้ออีเมล | คำค้นข่าว")
+            recipient, subject, topic = parts
+            results = search_web(topic)[:8]
+            if not results: raise RuntimeError("ไม่พบแหล่งข่าวที่ใช้ทำรายงาน")
+            lines = [f"รายงานข่าว: {topic}", "", "สรุปจากผลค้นหาสาธารณะ:"]
+            for i, item in enumerate(results, 1):
+                lines.append(f"{i}. {item.get('title') or item.get('snippet') or 'แหล่งข่าว'}\n{item.get('snippet','')}\n{item.get('url','')}")
+            raw = f"To: {recipient}\r\nSubject: {subject}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" + "\n\n".join(lines)
+            import base64
             encoded = base64.urlsafe_b64encode(raw.encode("utf-8")).decode().rstrip("=")
             return self._request(extension_id, "POST", "https://gmail.googleapis.com/gmail/v1/users/me/messages/send", json={"raw": encoded})
         if extension_id == "drive" and action == "search":
@@ -341,6 +351,14 @@ class ExtensionManager:
             )
             resp.raise_for_status()
             return resp.json()
+        if extension_id == "drive" and action == "delete":
+            file_id = query.strip()
+            if not file_id: raise RuntimeError("ต้องระบุ Drive file id")
+            return self._request(extension_id, "DELETE", f"https://www.googleapis.com/drive/v3/files/{file_id}")
+        if extension_id == "drive" and action == "update":
+            if "|" not in query: raise RuntimeError("รูปแบบแก้ชื่อไฟล์ Drive: file_id | ชื่อใหม่")
+            file_id, name = [part.strip() for part in query.split("|",1)]
+            return self._request(extension_id, "PATCH", f"https://www.googleapis.com/drive/v3/files/{file_id}", json={"name":name})
         if extension_id == "calendar" and action == "upcoming":
             from datetime import datetime, timezone
             return self._request(extension_id, "GET", "https://www.googleapis.com/calendar/v3/calendars/primary/events", params={"singleEvents": "true", "orderBy": "startTime", "maxResults": 20, "timeMin": datetime.now(timezone.utc).isoformat()})
@@ -349,6 +367,14 @@ class ExtensionManager:
             title, start_iso, end_iso = [part.strip() for part in query.split("|", 2)]
             body={"summary":title,"start":{"dateTime":start_iso},"end":{"dateTime":end_iso}}
             return self._request(extension_id, "POST", "https://www.googleapis.com/calendar/v3/calendars/primary/events", json=body)
+        if extension_id == "calendar" and action == "delete":
+            event_id = query.strip()
+            if not event_id: raise RuntimeError("ต้องระบุ Calendar event id")
+            return self._request(extension_id, "DELETE", f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}")
+        if extension_id == "calendar" and action == "update":
+            if query.count("|") != 3: raise RuntimeError("รูปแบบแก้นัด: event_id | title | start_iso | end_iso")
+            event_id, title, start_iso, end_iso = [part.strip() for part in query.split("|",3)]
+            return self._request(extension_id, "PATCH", f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}", json={"summary":title,"start":{"dateTime":start_iso},"end":{"dateTime":end_iso}})
         if extension_id == "github" and action == "repos":
             return self._request(extension_id, "GET", "https://api.github.com/user/repos", params={"per_page": 30, "sort": "updated"})
         if extension_id == "github" and action == "read":
@@ -359,6 +385,14 @@ class ExtensionManager:
             if "|" not in query or "/" not in query: raise RuntimeError("รูปแบบ issue: owner/repo | title | body")
             repo_full, title, body = [part.strip() for part in query.split("|",2)]
             return self._request(extension_id, "POST", f"https://api.github.com/repos/{repo_full}/issues", json={"title":title,"body":body})
+        if extension_id == "github" and action == "close_issue":
+            if "|" not in query: raise RuntimeError("รูปแบบปิด issue: owner/repo | issue_number")
+            repo_full, number = [part.strip() for part in query.split("|",1)]
+            return self._request(extension_id, "PATCH", f"https://api.github.com/repos/{repo_full}/issues/{number}", json={"state":"closed"})
+        if extension_id == "github" and action == "update_issue":
+            if query.count("|") != 3: raise RuntimeError("รูปแบบแก้ issue: owner/repo | issue_number | title | body")
+            repo_full, number, title, body = [part.strip() for part in query.split("|",3)]
+            return self._request(extension_id, "PATCH", f"https://api.github.com/repos/{repo_full}/issues/{number}", json={"title":title,"body":body})
         if extension_id == "notion" and action == "search":
             body = {"page_size": 20}
             if query: body["query"] = query
@@ -371,12 +405,4 @@ class ExtensionManager:
             if "|" not in query: raise RuntimeError("รูปแบบแก้ Notion: page_id | archived(true/false)")
             page_id, archived = [part.strip() for part in query.split("|",1)]
             return self._request(extension_id, "PATCH", f"https://api.notion.com/v1/pages/{page_id}", json={"archived": archived.lower()=="true"}, headers={"Notion-Version": os.getenv("NOTION_VERSION", "2026-03-11"), "Content-Type": "application/json"})
-        if extension_id == "slack" and action == "channels":
-            return self._request(extension_id, "GET", "https://slack.com/api/conversations.list", params={"limit": 100, "exclude_archived": "true"})
-        if extension_id == "slack" and action == "history":
-            return self._request(extension_id, "GET", "https://slack.com/api/conversations.history", params={"channel": query.strip(), "limit": 50})
-        if extension_id == "slack" and action == "send":
-            if "|" not in query: raise RuntimeError("รูปแบบ Slack: channel_id | message")
-            channel, message = [part.strip() for part in query.split("|",1)]
-            return self._request(extension_id, "POST", "https://slack.com/api/chat.postMessage", json={"channel":channel,"text":message})
         raise RuntimeError(f"ไม่รองรับ action {action} สำหรับ {extension_id}")

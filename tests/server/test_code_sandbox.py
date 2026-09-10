@@ -1,6 +1,11 @@
 import os
 import pytest
-from app.server.code_sandbox import run_code,check_answer
+from app.server.code_sandbox import RECIPES, run_code,check_answer
+
+def test_typescript_uses_supported_node_stdin_mode():
+    image, command = RECIPES['typescript']
+    assert image == 'node:24-alpine'
+    assert command == ['sh', '-c', 'cat > /work/main.ts && node --experimental-strip-types /work/main.ts']
 
 def test_unsupported_never_executes():
     assert run_code('ruby','puts 4')['status']=='unsupported'

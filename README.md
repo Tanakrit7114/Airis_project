@@ -65,7 +65,6 @@ Before clicking **Connect**, create OAuth credentials with the provider and conf
 http://127.0.0.1:8000/api/extensions/oauth/google/callback
 http://127.0.0.1:8000/api/extensions/oauth/github/callback
 http://127.0.0.1:8000/api/extensions/oauth/notion/callback
-http://127.0.0.1:8000/api/extensions/oauth/slack/callback
 ```
 
 Google uses one OAuth client but each Google Extension requests only its own read scope. After connecting, use **Test** to validate the token and **Test API** to exercise a read-only API call.

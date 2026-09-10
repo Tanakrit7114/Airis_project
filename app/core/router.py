@@ -143,10 +143,22 @@ class Router:
         search_words = [
             "latest",
             "news",
+            "search",
+            "research",
+            "sources",
+            "source",
+            "citation",
+            "cite",
+            "current",
             "ราคา",
             "ล่าสุด",
             "ค้นหา",
             "หาข้อมูล",
+            "อ้างอิง",
+            "แหล่งข้อมูล",
+            "แหล่งอ้างอิง",
+            "ข่าว",
+            "ปัจจุบัน",
         ]
 
         if any(word in t for word in search_words):
